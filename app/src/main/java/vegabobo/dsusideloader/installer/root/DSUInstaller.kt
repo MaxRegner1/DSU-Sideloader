@@ -252,29 +252,34 @@ class DSUInstaller(
     /**
      * Custom GSI installation logic
      */
-    private fun installGSI() {
-        Log.d(tag, "Starting GSI installation")
-
-        // Perform necessary GSI installation steps
-        // Example: Handle extra partitions, check conditions, or trigger specific GSI-related installation flows.
-
-        val gsiUri: Uri = dsuInstallation.uri  // Example GSI URI
-
-        // Check if the GSI requires special handling
-        if (dsuInstallation.requiresGSIHandling) {
-            Log.d(tag, "Special GSI handling required.")
-            
-            // Custom partition handling for GSI
-            val gsiPartitions = listOf("system", "vendor", "product")
-            gsiPartitions.forEach { partition ->
-                Log.d(tag, "Installing GSI partition: $partition")
-                // Assume we use `installImage` for GSI partitions
-                installImage(partition, dsuInstallation.fileSize, gsiUri)
-            }
-
-            Log.d(tag, "GSI installation complete.")
-        } else {
-            Log.d(tag, "Standard GSI installation process.")
+    private fun installImage(partitionName: String, uncompressedSize: Long, uri: Uri) {
+        installImage(
+            partitionName,
+            uncompressedSize,
+            openInputStream(uri),
+        )
+        if (installationJob.isCancelled) {
+            remove()
         }
+    }
+
+    fun openInputStream(uri: Uri): InputStream {
+        return application.contentResolver.openInputStream(uri)!!
+    }
+
+    fun createNewPartition(partition: String, partitionSize: Long, readOnly: Boolean) {
+        val result = createPartition(partition, partitionSize, readOnly)
+        if (result != IGsiService.INSTALL_OK) {
+            Log.d(
+                tag,
+                "Failed to create $partition partition, error code: $result (check: IGsiService.INSTALL_*)",
+            )
+            installationJob.cancel()
+            onInstallationError(InstallationStep.ERROR_CREATE_PARTITION, partition)
+        }
+    }
+
+    override fun invoke() {
+        startInstallation()
     }
 }
